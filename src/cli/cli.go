@@ -10,21 +10,21 @@ import (
 	"strings"
 )
 
-// Options stores the download settings.
-type Options struct {
+// Wconfig stores the download settings.
+type Wconfig struct {
 	URL        string
 	OutputName string
 	Path       string
 }
 
 // Parse reads the arguments and checks if they are valid.
-func Parse(args []string) (*Options, error) {
+func Parse(args []string) (*Wconfig, error) {
 	fs := flag.NewFlagSet("wget", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	var opts Options
-	fs.StringVar(&opts.OutputName, "O", "", "output file name")
-	fs.StringVar(&opts.Path, "P", "", "output directory")
+	var conf Wconfig
+	fs.StringVar(&conf.OutputName, "O", "", "output file name")
+	fs.StringVar(&conf.Path, "P", "", "output directory")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -34,12 +34,12 @@ func Parse(args []string) (*Options, error) {
 		return nil, errors.New("usage: wget [flags] <url>")
 	}
 
-	opts.URL = fs.Arg(0)
-	if err := validateURL(opts.URL); err != nil {
+	conf.URL = fs.Arg(0)
+	if err := validateURL(conf.URL); err != nil {
 		return nil, err
 	}
 
-	return &opts, nil
+	return &conf, nil
 }
 
 // validateURL checks that the URL is valid and uses HTTP or HTTPS.
@@ -58,11 +58,11 @@ func validateURL(raw string) error {
 }
 
 // FileName returns the name used to save the file.
-func (o *Options) FileName() string {
-	if o.OutputName != "" {
-		return o.OutputName
+func (conf *Wconfig) FileName() string {
+	if conf.OutputName != "" {
+		return conf.OutputName
 	}
-	u, err := url.Parse(o.URL)
+	u, err := url.Parse(conf.URL)
 	if err != nil {
 		return "index.html"
 	}
@@ -77,11 +77,11 @@ func (o *Options) FileName() string {
 }
 
 // FullPath returns the directory and file name together.
-func (o *Options) FullPath() string {
-	name := o.FileName()
-	if o.Path == "" {
+func (conf *Wconfig) FullPath() string {
+	name := conf.FileName()
+	if conf.Path == "" {
 		return "./" + name
 	}
-	p := strings.TrimRight(o.Path, "/")
+	p := strings.TrimRight(conf.Path, "/")
 	return p + "/" + name
 }

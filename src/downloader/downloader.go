@@ -14,8 +14,8 @@ import (
 )
 
 // Download gets a file from the URL and saves it.
-func Download(opts *cli.Options) error {
-	resp, err := http.Get(opts.URL)
+func Download(conf *cli.Wconfig) error {
+	resp, err := http.Get(conf.URL)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
@@ -29,7 +29,7 @@ func Download(opts *cli.Options) error {
 	size := resp.ContentLength
 	fmt.Printf("content size: %d [%s]\n", size, humanSize(size))
 
-	dest := opts.FullPath()
+	dest := conf.FullPath()
 	fmt.Printf("saving file to: %s\n", dest)
 
 	// Create the folder if it doesn't exist.
@@ -51,7 +51,7 @@ func Download(opts *cli.Options) error {
 		return fmt.Errorf("download failed: %w", err)
 	}
 
-	fmt.Printf("Downloaded [%s]\n", opts.URL)
+	fmt.Printf("Downloaded [%s]\n", conf.URL)
 	return nil
 }
 
