@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"wget/src/cli"
+	"wget/src/progress"
 )
 
 // Download gets a file from the URL and saves it.
@@ -46,11 +47,15 @@ func Download(conf *cli.Wconfig) error {
 	}
 	defer f.Close()
 
-	// Copy the downloaded data into the file.
-	if _, err := io.Copy(f, resp.Body); err != nil {
+	// Stream the data into the file while updating the progress bar.
+	bar := progress.NewBar(size)
+	_, err = io.Copy(f, io.TeeReader(resp.Body, bar))
+	bar.Finish()
+	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
 
+	fmt.Println()
 	fmt.Printf("Downloaded [%s]\n", conf.URL)
 	return nil
 }
