@@ -12,6 +12,7 @@ import (
 
 	"wget/src/cli"
 	"wget/src/progress"
+	"wget/src/ratelimit"
 )
 
 // Download gets a file from the URL and saves it.
@@ -47,9 +48,16 @@ func Download(conf *cli.Wconfig) error {
 	}
 	defer f.Close()
 
+	// When a rate limit is set, data flows through the limiter
+	// first so it never arrives faster than allowed.
+	var body io.Reader = resp.Body
+	if conf.RateLimit > 0 {
+		body = ratelimit.NewReader(resp.Body, conf.RateLimit)
+	}
+
 	// Stream the data into the file while updating the progress bar.
 	bar := progress.NewBar(size)
-	_, err = io.Copy(f, io.TeeReader(resp.Body, bar))
+	_, err = io.Copy(f, io.TeeReader(body, bar))
 	bar.Finish()
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)

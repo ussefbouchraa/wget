@@ -5,8 +5,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net/url"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -15,6 +15,7 @@ type Wconfig struct {
 	URL        string
 	OutputName string
 	Path       string
+	RateLimit  float64 // bytes per second, 0 means "no limit"
 }
 
 // Parse reads the arguments and checks if they are valid.
@@ -23,11 +24,21 @@ func Parse(args []string) (*Wconfig, error) {
 	fs.SetOutput(os.Stderr)
 
 	var conf Wconfig
+	var rateLimit string
 	fs.StringVar(&conf.OutputName, "O", "", "output file name")
 	fs.StringVar(&conf.Path, "P", "", "output directory")
+	fs.StringVar(&rateLimit, "rate-limit", "", "max download speed, e.g. 300k or 2M")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
+	}
+
+	if rateLimit != "" {
+		bps, err := ParseRateLimit(rateLimit)
+		if err != nil {
+			return nil, err
+		}
+		conf.RateLimit = bps //speed limit
 	}
 
 	if fs.NArg() != 1 {
@@ -42,46 +53,29 @@ func Parse(args []string) (*Wconfig, error) {
 	return &conf, nil
 }
 
-// validateURL checks that the URL is valid and uses HTTP or HTTPS.
-func validateURL(raw string) error {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return fmt.Errorf("invalid url %q: %w", raw, err)
+// ParseRateLimit turns a value like "300k", "2M" or "512" into anumber of bytes per second	
+func ParseRateLimit(s string) (float64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, errors.New("rate limit value cannot be empty")
 	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("unsupported scheme %q in url %q (only http/https)", u.Scheme, raw)
-	}
-	if u.Host == "" {
-		return fmt.Errorf("missing host in url %q", raw)
-	}
-	return nil
-}
 
-// FileName returns the name used to save the file.
-func (conf *Wconfig) FileName() string {
-	if conf.OutputName != "" {
-		return conf.OutputName
+	multiplier := 1.0
+	switch s[len(s)-1] {
+	case 'k', 'K':
+		multiplier = 1024
+		s = s[:len(s)-1]
+	case 'm', 'M':
+		multiplier = 1024 * 1024
+		s = s[:len(s)-1]
+	case 'g', 'G':
+		multiplier = 1024 * 1024 * 1024
+		s = s[:len(s)-1]
 	}
-	u, err := url.Parse(conf.URL)
-	if err != nil {
-		return "index.html"
-	}
-	name := u.Path
-	if i := strings.LastIndex(name, "/"); i >= 0 {
-		name = name[i+1:]
-	}
-	if name == "" {
-		return "index.html"
-	}
-	return name
-}
 
-// FullPath returns the directory and file name together.
-func (conf *Wconfig) FullPath() string {
-	name := conf.FileName()
-	if conf.Path == "" {
-		return "./" + name
+	value, err := strconv.ParseFloat(s, 64)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("invalid rate limit %q (use e.g. 300k or 2M)", s)
 	}
-	p := strings.TrimRight(conf.Path, "/")
-	return p + "/" + name
+	return value * multiplier, nil
 }
