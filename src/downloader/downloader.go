@@ -15,24 +15,25 @@ import (
 	"wget/src/ratelimit"
 )
 
-// Download gets a file from the URL and saves it.
-func Download(conf *cli.Wconfig) error {
+// Download gets a file from the URL and saves it. All textual output is
+// written to out so callers (batch, background) can redirect or buffer it.
+func Download(conf *cli.Wconfig, out io.Writer) error {
 	resp, err := http.Get(conf.URL)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	fmt.Printf("sending request, awaiting response... status %s\n", resp.Status)
+	fmt.Fprintf(out, "sending request, awaiting response... status %s\n", resp.Status)
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server responded with %s", resp.Status)
 	}
 
 	size := resp.ContentLength
-	fmt.Printf("content size: %d [%s]\n", size, humanSize(size))
+	fmt.Fprintf(out, "content size: %d [%s]\n", size, humanSize(size))
 
 	dest := conf.FullPath()
-	fmt.Printf("saving file to: %s\n", dest)
+	fmt.Fprintf(out, "saving file to: %s\n", dest)
 
 	// Create the folder if it doesn't exist.
 	if dir := filepath.Dir(dest); dir != "" && dir != "." {
@@ -56,15 +57,15 @@ func Download(conf *cli.Wconfig) error {
 	}
 
 	// Stream the data into the file while updating the progress bar.
-	bar := progress.NewBar(size)
+	bar := progress.NewBar(size, out)
 	_, err = io.Copy(f, io.TeeReader(body, bar))
 	bar.Finish()
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
 
-	fmt.Println()
-	fmt.Printf("Downloaded [%s]\n", conf.URL)
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "Downloaded [%s]\n", conf.URL)
 	return nil
 }
 

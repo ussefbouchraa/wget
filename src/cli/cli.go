@@ -16,6 +16,8 @@ type Wconfig struct {
 	OutputName string
 	Path       string
 	RateLimit  float64 // bytes per second, 0 means "no limit"
+	InputFile  string  // -i: file containing a list of URLs
+	Background bool    // -B: run silently, write output to wget-log
 }
 
 // Parse reads the arguments and checks if they are valid.
@@ -28,6 +30,8 @@ func Parse(args []string) (*Wconfig, error) {
 	fs.StringVar(&conf.OutputName, "O", "", "output file name")
 	fs.StringVar(&conf.Path, "P", "", "output directory")
 	fs.StringVar(&rateLimit, "rate-limit", "", "max download speed, e.g. 300k or 2M")
+	fs.StringVar(&conf.InputFile, "i", "", "file with a list of URLs to download")
+	fs.BoolVar(&conf.Background, "B", false, "download in background, output written to wget-log")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -39,6 +43,17 @@ func Parse(args []string) (*Wconfig, error) {
 			return nil, err
 		}
 		conf.RateLimit = bps //speed limit
+	}
+
+	if conf.InputFile != "" {
+		// Batch mode: URLs come from the file, no positional URL allowed.
+		if fs.NArg() > 0 {
+			return nil, errors.New("cannot use -i together with a URL")
+		}
+		if conf.OutputName != "" {
+			return nil, errors.New("-O cannot be used together with -i")
+		}
+		return &conf, nil
 	}
 
 	if fs.NArg() != 1 {
@@ -53,7 +68,7 @@ func Parse(args []string) (*Wconfig, error) {
 	return &conf, nil
 }
 
-// ParseRateLimit turns a value like "300k", "2M" or "512" into anumber of bytes per second	
+// ParseRateLimit turns a value like "300k", "2M" or "512" into anumber of bytes per second
 func ParseRateLimit(s string) (float64, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

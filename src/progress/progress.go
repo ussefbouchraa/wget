@@ -2,6 +2,8 @@ package progress
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -11,18 +13,23 @@ const barWidth = 112 // progress width
 
 // Bar shows how much of a download is complete.
 type Bar struct {
-	start time.Time
+	start    time.Time
 	fileSize int64 //total bytes
-	received  int64 // bytes downloaded 
-	
-	mu   sync.Mutex
+	received int64 // bytes downloaded
+
+	out    io.Writer
+	mu     sync.Mutex
 	stopCh chan struct{}
 	doneCh chan struct{}
 }
 
-// New starts a bar that redraws itself every 100 ms.
-func NewBar(fileSize int64) *Bar {
-	b := &Bar{fileSize: fileSize, start: time.Now(), stopCh: make(chan struct{}), doneCh: make(chan struct{})}
+// NewBar starts a bar that redraws itself every 100 ms on out.
+// A nil out means os.Stdout.
+func NewBar(fileSize int64, out io.Writer) *Bar {
+	if out == nil {
+		out = os.Stdout
+	}
+	b := &Bar{fileSize: fileSize, out: out, start: time.Now(), stopCh: make(chan struct{}), doneCh: make(chan struct{})}
 	go b.refresh()
 	return b
 }
@@ -41,7 +48,7 @@ func (b *Bar) Finish() {
 	close(b.stopCh)
 	<-b.doneCh
 	b.render()
-	fmt.Println()
+	fmt.Fprintln(b.out)
 }
 
 func (b *Bar) refresh() {
@@ -82,7 +89,7 @@ func (b *Bar) render() {
 
 	bar := strings.Repeat("=", filled) + strings.Repeat(" ", barWidth-filled)
 	speed := formatSize(int64(float64(received) / elapsed.Seconds()))
-	fmt.Printf("\r %s / %s [%s] %.2f%% %s/s %s\x1b[K",
+	fmt.Fprintf(b.out, "\r %s / %s [%s] %.2f%% %s/s %s\x1b[K",
 		formatSize(received), fileSize, bar, pct, speed, timeRemaining(pct, elapsed))
 }
 
